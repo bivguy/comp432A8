@@ -13,8 +13,31 @@ MyDB_TableReaderWriterPtr LogicalTableScan :: execute (map <string, MyDB_TableRe
 	map <string, MyDB_BPlusTreeReaderWriterPtr> &allBPlusReaderWriters) {
 
 	// your code here!
+	MyDB_TableReaderWriterPtr inputTableRW = allTableReaderWriters[this->getInputTableName()];
 
-	return nullptr;
+	MyDB_BufferManagerPtr myMgr = make_shared <MyDB_BufferManager> (131072, 4028, "tempFile");
+	MyDB_TableReaderWriterPtr outputTableRW = make_shared<MyDB_TableReaderWriter>(this->outputSpec, myMgr);
+
+	vector<string> projections;
+	for (auto& att : outputSpec->getSchema()->getAtts())
+		projections.push_back(att.first);
+
+	for (auto& projection : projections)
+		cout << projection << endl;
+	
+	string predicate = "";
+	if (this->selectionPred.size() > 0) {
+		predicate = this->selectionPred[0]->toString();
+	}
+
+	for (int i = 1; i < this->selectionPred.size(); i++)
+		predicate = "&& (" + predicate + ", " + this->selectionPred[i]->toString() + ")";
+
+	shared_ptr<RegularSelection> regSelection = make_shared<RegularSelection>(inputTableRW, outputTableRW, predicate, projections);
+
+	regSelection->run();
+
+	return outputTableRW;
 }
 
 MyDB_TableReaderWriterPtr LogicalJoin :: execute (map <string, MyDB_TableReaderWriterPtr> &allTableReaderWriters,
