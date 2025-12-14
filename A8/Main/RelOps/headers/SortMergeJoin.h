@@ -33,10 +33,14 @@ public:
 	// Finally, the vector projections contains all of the computations that are
 	// performed to create the output records from the join.
 	//
-	SortMergeJoin (MyDB_TableReaderWriterPtr leftInput, MyDB_TableReaderWriterPtr rightInput,
-		MyDB_TableReaderWriterPtr output, string finalSelectionPredicate, 
+	SortMergeJoin (
+		MyDB_TableReaderWriterPtr leftInput, 
+		MyDB_TableReaderWriterPtr rightInput,
+		MyDB_TableReaderWriterPtr output, 
+		string finalSelectionPredicate, 
 		vector <string> projections,
-		pair <string, string> equalityCheck, string leftSelectionPredicate,
+		pair <string, string> equalityCheck, 
+		string leftSelectionPredicate,
 		string rightSelectionPredicate);
 	
 	// execute the join

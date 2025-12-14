@@ -77,10 +77,14 @@ public:
         //         "|| ( == ([l_nationkey], int[3]), == ([l_nationkey], int[4]))",
         //         "== ([r_nationkey], int[3])");
 	//
-	ScanJoin (MyDB_TableReaderWriterPtr leftInput, MyDB_TableReaderWriterPtr rightInput,
-		MyDB_TableReaderWriterPtr output, string finalSelectionPredicate, 
+	ScanJoin (
+		MyDB_TableReaderWriterPtr leftInput, 
+		MyDB_TableReaderWriterPtr rightInput,
+		MyDB_TableReaderWriterPtr output, 
+		string finalSelectionPredicate, 
 		vector <string> projections,
-		vector <pair <string, string>> equalityChecks, string leftSelectionPredicate,
+		vector <pair <string, string>> equalityChecks,
+		string leftSelectionPredicate,
 		string rightSelectionPredicate);
 	
 	// execute the join

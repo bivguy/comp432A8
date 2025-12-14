@@ -40,8 +40,101 @@ MyDB_TableReaderWriterPtr LogicalJoin :: execute (map <string, MyDB_TableReaderW
 	map <string, MyDB_BPlusTreeReaderWriterPtr> &allBPlusReaderWriters) {
 
 	// your code here!
+	MyDB_TableReaderWriterPtr lTable = this->leftInputOp->execute(allTableReaderWriters, allBPlusReaderWriters);
+	MyDB_TableReaderWriterPtr rTable = this->rightInputOp->execute(allTableReaderWriters, allBPlusReaderWriters);
+	MyDB_TableReaderWriterPtr output = make_shared<MyDB_TableReaderWriter>(this->outputSpec, lTable->getBufferMgr());
 
-	return nullptr;
+	int lTableSize = lTable->getNumPages();
+	int rTableSize = rTable->getNumPages();
+	
+	// TODO: see if this is the right way to get the buffer size
+	MyDB_BufferManagerPtr myMgr = make_shared <MyDB_BufferManager> (131072, 4028, "tempFile");
+	int bufferSize = myMgr->getNumPages();
+	
+	// create final selection predicate
+	string finalSelectionPredicate = "";
+	if (this->outputSelectionPredicate.size() > 0) {
+		finalSelectionPredicate = this->outputSelectionPredicate[0]->toString();
+		for (int i = 1; i < this->outputSelectionPredicate.size(); i++) {
+			finalSelectionPredicate = "&& (" + finalSelectionPredicate + ", " + this->outputSelectionPredicate[i]->toString() + ")";
+		}
+	}
+
+	// create projections
+	vector<string> projections;
+	for (auto& att: outputSpec->getSchema()->getAtts()) {
+		projections.push_back("[" + att.first + "]");
+	}
+
+	// create equality checks
+	vector <pair <string, string>> equalityChecks;
+	for (auto& att: this->outputSelectionPredicate) {
+		if (att->isEq()) {
+			ExprTreePtr lhs = att->getLHS();
+			ExprTreePtr rhs = att->getRHS();
+
+			equalityChecks.push_back(make_pair(lhs->toString(), rhs->toString()));
+		}
+	}
+
+	// create left and right selection predicates 
+	string leftSelectionPredicate = "";
+	string rightSelectionPredicate = "";
+	for (auto& att: this->outputSelectionPredicate) {
+		bool inLeft = att->referencesTable(this->leftInputOp->getOutputTable()->getName());
+		bool inRight = att->referencesTable(this->rightInputOp->getOutputTable()->getName());
+
+		if (inLeft && !inRight) {
+			if (leftSelectionPredicate == "") {
+				leftSelectionPredicate = att->toString();
+			} else {
+				leftSelectionPredicate = "&& (" + leftSelectionPredicate + ", " + att->toString() + ")";
+			}
+		} else if (!inLeft && inRight) {
+			if (rightSelectionPredicate == "") {
+				rightSelectionPredicate = att->toString();
+			} else {
+				rightSelectionPredicate = "&& (" + rightSelectionPredicate + ", " + att->toString() + ")";
+			}
+		}
+	}
+
+	// choose between scan join and sort merge join
+	if (lTableSize * 2 < bufferSize || rTableSize * 2 < bufferSize) {
+		// TODO: implement this
+		shared_ptr<ScanJoin> scanJoin = make_shared<ScanJoin>(
+			lTable,
+			rTable,
+			output,
+			finalSelectionPredicate,
+			projections,
+			equalityChecks,
+			leftSelectionPredicate,
+			rightSelectionPredicate
+		);
+
+		scanJoin->run();
+	} else { 
+		pair <string, string> equalityCheck = make_pair("", "");
+		if (equalityChecks.size() > 0) {
+			equalityCheck = equalityChecks[0];
+		}
+		// TODO: implement this
+		shared_ptr<SortMergeJoin> sortMergeJoin = make_shared<SortMergeJoin>(
+			lTable,
+			rTable,
+			output,
+			finalSelectionPredicate,
+			projections,
+			equalityCheck,
+			leftSelectionPredicate,
+			rightSelectionPredicate
+		);
+
+		sortMergeJoin->run();
+	}
+
+	return output;
 }
 
 #endif
