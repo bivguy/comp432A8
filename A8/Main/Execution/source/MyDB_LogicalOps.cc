@@ -13,17 +13,13 @@ MyDB_TableReaderWriterPtr LogicalTableScan :: execute (map <string, MyDB_TableRe
 	map <string, MyDB_BPlusTreeReaderWriterPtr> &allBPlusReaderWriters) {
 
 	// your code here!
-	MyDB_TableReaderWriterPtr inputTableRW = allTableReaderWriters[this->getInputTableName()];
-
 	MyDB_BufferManagerPtr myMgr = make_shared <MyDB_BufferManager> (131072, 4028, "tempFile");
+	MyDB_TableReaderWriterPtr inputTableRW = make_shared<MyDB_TableReaderWriter>(this->inputSpec, myMgr);
 	MyDB_TableReaderWriterPtr outputTableRW = make_shared<MyDB_TableReaderWriter>(this->outputSpec, myMgr);
 
 	vector<string> projections;
 	for (auto& att : outputSpec->getSchema()->getAtts())
-		projections.push_back(att.first);
-
-	for (auto& projection : projections)
-		cout << projection << endl;
+		projections.push_back("[" + att.first + "]");
 	
 	string predicate = "";
 	if (this->selectionPred.size() > 0) {
@@ -31,7 +27,7 @@ MyDB_TableReaderWriterPtr LogicalTableScan :: execute (map <string, MyDB_TableRe
 	}
 
 	for (int i = 1; i < this->selectionPred.size(); i++)
-		predicate = "&& (" + predicate + ", " + this->selectionPred[i]->toString() + ")";
+		predicate = "&& (" + this->selectionPred[i]->toString() + ", " + predicate + ")";
 
 	shared_ptr<RegularSelection> regSelection = make_shared<RegularSelection>(inputTableRW, outputTableRW, predicate, projections);
 
