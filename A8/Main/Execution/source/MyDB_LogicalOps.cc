@@ -67,8 +67,10 @@ MyDB_TableReaderWriterPtr LogicalJoin :: execute (map <string, MyDB_TableReaderW
 	MyDB_BufferManagerPtr myMgr = make_shared <MyDB_BufferManager> (131072, 4028, "tempFile");
 	int bufferSize = myMgr->getNumPages();
 	
+	string defaultPred = "== (string[F], string[F])";
+
 	// create final selection predicate
-	string finalSelectionPredicate = "";
+	string finalSelectionPredicate = defaultPred;
 	if (this->outputSelectionPredicate.size() > 0) {
 		finalSelectionPredicate = this->outputSelectionPredicate[0]->toString();
 		if (DEBUG_JOIN_OP) {
@@ -98,22 +100,55 @@ MyDB_TableReaderWriterPtr LogicalJoin :: execute (map <string, MyDB_TableReaderW
 
 
 
+	MyDB_SchemaPtr leftSchema = this->leftInputOp->getOutputTable()->getSchema();
+    MyDB_SchemaPtr rightSchema = this->rightInputOp->getOutputTable()->getSchema();
+
+	if (DEBUG_JOIN_OP) {
+		for (auto& att: leftSchema->getAtts()) {
+			cout << "Left Schema Attribute: " << att.first << "\n" << flush;
+		}
+
+		for (auto& att: rightSchema->getAtts()) {
+			cout << "Right Schema Attribute: " << att.first << "\n" << flush;
+		}
+	}
 	string leftTableName = this->leftInputOp->getOutputTable()->getName();
 	string rightTableName = this->rightInputOp->getOutputTable()->getName();
 
+	if (DEBUG_JOIN_OP) {
+		cout << "Left Table Name: " << leftTableName << "\n" << flush;
+		cout << "Right Table Name: " << rightTableName << "\n" << flush;
+	}
 	// create equality checks
 	vector <pair <string, string>> equalityChecks;
 	for (auto& att: this->outputSelectionPredicate) {
 		if (att->isEq()) {
 			ExprTreePtr lhs = att->getLHS();
 			ExprTreePtr rhs = att->getRHS();
-			pair<string, string> check;
+			pair<string, string> check = make_pair(lhs->toString(), rhs->toString());
+			
+			if (DEBUG_JOIN_OP) {
+				cout << "At equality check: " << att->toString() << ")\n" << flush;
 
-			bool leftReferencesLeft = lhs->referencesTable(leftTableName);
-			bool rightReferencesRight = rhs->referencesTable(rightTableName);
+			}
 
-			bool leftReferencesRight = lhs->referencesTable(rightTableName);
-			bool rightReferencesLeft = rhs->referencesTable(leftTableName);
+			auto inSchema = [](string checkAtt, MyDB_SchemaPtr schema) {
+                string dec = checkAtt;
+                // Remove brackets if necessary
+                if (dec.size() > 2 && dec.front() == '[' && dec.back() == ']') {
+                    dec = dec.substr(1, dec.size() - 2);
+                }
+                for (auto& att : schema->getAtts()) {
+                    if (att.first == dec) return true;
+                }
+                return false;
+            };
+
+			bool leftReferencesLeft = inSchema(lhs->toString(), leftSchema);
+			bool rightReferencesRight = inSchema(rhs->toString(), rightSchema);
+
+			bool leftReferencesRight = inSchema(lhs->toString(), rightSchema);
+			bool rightReferencesLeft = inSchema(rhs->toString(), leftSchema);
 
 			if (leftReferencesLeft && rightReferencesRight) {
 				check = make_pair(lhs->toString(), rhs->toString());
@@ -131,35 +166,25 @@ MyDB_TableReaderWriterPtr LogicalJoin :: execute (map <string, MyDB_TableReaderW
 	}
 
 	// create left and right selection predicates 
-	string leftSelectionPredicate = "";
-	LogicalOpPtr left = this->leftInputOp;
-	string rightSelectionPredicate = "";
-
+	string leftSelectionPredicate = defaultPred;
+	string rightSelectionPredicate = defaultPred;
 	for (auto& att: this->outputSelectionPredicate) {
 		bool inLeft = att->referencesTable(leftTableName);
 		bool inRight = att->referencesTable(rightTableName);
 
 		if (inLeft && !inRight) {
-			if (leftSelectionPredicate == "") {
+			if (leftSelectionPredicate == defaultPred) {
 				leftSelectionPredicate = att->toString();
 			} else {
 				leftSelectionPredicate = "&& (" + leftSelectionPredicate + ", " + att->toString() + ")";
 			}
 		} else if (!inLeft && inRight) {
-			if (rightSelectionPredicate == "") {
+			if (rightSelectionPredicate == defaultPred) {
 				rightSelectionPredicate = att->toString();
 			} else {
 				rightSelectionPredicate = "&& (" + rightSelectionPredicate + ", " + att->toString() + ")";
 			}
 		}
-	}
-
-	if (leftSelectionPredicate == "") {
-		leftSelectionPredicate = "== (string[F], string[F])";
-	}
-
-	if (rightSelectionPredicate == "") {
-		rightSelectionPredicate = "== (string[F], string[F])";
 	}
 
 	if (DEBUG_JOIN_OP) {
