@@ -9,8 +9,8 @@
 #include "ScanJoin.h"
 #include "SortMergeJoin.h"
 
-const bool DEBUG_JOIN_OP = true;
-const bool DEBUG_SCAN = true;
+const bool DEBUG_JOIN_OP = false;
+const bool DEBUG_SCAN = false;
 
 MyDB_TableReaderWriterPtr LogicalTableScan :: execute (map <string, MyDB_TableReaderWriterPtr> &allTableReaderWriters,
 	map <string, MyDB_BPlusTreeReaderWriterPtr> &allBPlusReaderWriters) {
@@ -234,6 +234,8 @@ MyDB_TableReaderWriterPtr LogicalJoin :: execute (map <string, MyDB_TableReaderW
 		sortMergeJoin->run();
 	}
 
+	lTable->getBufferMgr()->killTable(lTable->getTable());
+	rTable->getBufferMgr()->killTable(rTable->getTable());
 	return output;
 }
 
