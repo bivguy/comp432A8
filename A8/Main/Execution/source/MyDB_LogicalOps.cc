@@ -16,7 +16,7 @@ MyDB_TableReaderWriterPtr LogicalTableScan :: execute (map <string, MyDB_TableRe
 	map <string, MyDB_BPlusTreeReaderWriterPtr> &allBPlusReaderWriters) {
 
 	// your code here!
-	MyDB_BufferManagerPtr myMgr = make_shared <MyDB_BufferManager> (131072, 4028, "tempFile");
+	MyDB_BufferManagerPtr myMgr = allTableReaderWriters.begin()->second->getBufferMgr();
 	MyDB_TableReaderWriterPtr inputTableRW = make_shared<MyDB_TableReaderWriter>(this->inputSpec, myMgr);
 	MyDB_TableReaderWriterPtr outputTableRW = make_shared<MyDB_TableReaderWriter>(this->outputSpec, myMgr);
 
@@ -28,12 +28,8 @@ MyDB_TableReaderWriterPtr LogicalTableScan :: execute (map <string, MyDB_TableRe
 		}
 	}
 	
-	string predicate = "== (string[F], string[F])";
-	if (this->selectionPred.size() > 0) {
-		predicate = this->selectionPred[0]->toString();
-	}
-
-	for (int i = 1; i < this->selectionPred.size(); i++)
+	string predicate = "bool[true]";
+	for (int i = 0; i < this->selectionPred.size(); i++)
 		predicate = "&& (" + this->selectionPred[i]->toString() + ", " + predicate + ")";
 
 	if (DEBUG_SCAN) {
@@ -63,20 +59,17 @@ MyDB_TableReaderWriterPtr LogicalJoin :: execute (map <string, MyDB_TableReaderW
 	int lTableSize = lTable->getNumPages();
 	int rTableSize = rTable->getNumPages();
 	
-	// TODO: see if this is the right way to get the buffer size
-	MyDB_BufferManagerPtr myMgr = make_shared <MyDB_BufferManager> (131072, 4028, "tempFile");
-	int bufferSize = myMgr->getNumPages();
+	int bufferSize = lTable->getBufferMgr()->getNumPages();
 	
-	string defaultPred = "== (string[F], string[F])";
+	string defaultPred = "bool[true]";
 
 	// create final selection predicate
 	string finalSelectionPredicate = defaultPred;
 	if (this->outputSelectionPredicate.size() > 0) {
-		finalSelectionPredicate = this->outputSelectionPredicate[0]->toString();
 		if (DEBUG_JOIN_OP) {
 			cout << "At outputSelectionPredicate " << this->outputSelectionPredicate[0]->toString() << "\n" << flush;
 		}
-		for (int i = 1; i < this->outputSelectionPredicate.size(); i++) {
+		for (int i = 0; i < this->outputSelectionPredicate.size(); i++) {
 			finalSelectionPredicate = "&& (" + finalSelectionPredicate + ", " + this->outputSelectionPredicate[i]->toString() + ")";
 			if (DEBUG_JOIN_OP) {
 				cout << "At outputSelectionPredicate " << this->outputSelectionPredicate[i]->toString() << "\n" << flush;
@@ -173,17 +166,9 @@ MyDB_TableReaderWriterPtr LogicalJoin :: execute (map <string, MyDB_TableReaderW
 		bool inRight = att->referencesTable(rightTableName);
 
 		if (inLeft && !inRight) {
-			if (leftSelectionPredicate == defaultPred) {
-				leftSelectionPredicate = att->toString();
-			} else {
-				leftSelectionPredicate = "&& (" + leftSelectionPredicate + ", " + att->toString() + ")";
-			}
+			leftSelectionPredicate = "&& (" + leftSelectionPredicate + ", " + att->toString() + ")";
 		} else if (!inLeft && inRight) {
-			if (rightSelectionPredicate == defaultPred) {
-				rightSelectionPredicate = att->toString();
-			} else {
-				rightSelectionPredicate = "&& (" + rightSelectionPredicate + ", " + att->toString() + ")";
-			}
+			rightSelectionPredicate = "&& (" + rightSelectionPredicate + ", " + att->toString() + ")";
 		}
 	}
 
@@ -193,7 +178,7 @@ MyDB_TableReaderWriterPtr LogicalJoin :: execute (map <string, MyDB_TableReaderW
 	}
 
 	// choose between scan join and sort merge join
-	if (lTableSize * 2 < bufferSize || rTableSize * 2 < bufferSize) {
+	if (lTableSize * 2 <= bufferSize || rTableSize * 2 <= bufferSize) {
 		if (DEBUG_JOIN_OP) {
 			cout << "Using Scan Join\n" << flush;
 		}
